@@ -47,7 +47,7 @@ describe('proxy routes', () => {
     expect((await outgoing!.formData()).get('model')).toBe('whisper-translate')
   })
 
-  test('detects language from only the configured raw PCM prefix', async () => {
+  test('sends only the configured total PCM duration for detection', async () => {
     let uploadedSize = 0
     const fetcher = async (_request: RequestInfo | URL, init?: RequestInit) => {
       const form = await new Request('http://localai.test', init).formData()

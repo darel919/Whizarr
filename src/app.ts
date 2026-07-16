@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
 import { Elysia } from 'elysia'
 import packageJson from '../package.json'
-import { normalizeAudio } from './audio/normalize'
+import { normalizeAudio, normalizeDetectionAudio } from './audio/normalize'
 import { PCM_BITS_PER_SAMPLE, PCM_CHANNELS, PCM_SAMPLE_RATE } from './audio/wav'
 import { Semaphore } from './concurrency'
 import type { Config } from './config'
@@ -83,8 +83,8 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
       if (file.size > config.maxAudioUploadBytes) throw new ApiError(413, 'audio_file exceeds MAX_AUDIO_UPLOAD_MB')
       const bytesPerSecond = PCM_SAMPLE_RATE * PCM_CHANNELS * (PCM_BITS_PER_SAMPLE / 8)
       try {
-        const normalized = await normalizeAudio(file, query.encode, bytesPerSecond * config.detectionSeconds)
-        log('info', 'detection_started', { requestId, route: '/detect-language', audioBytes: file.size, sampleBytes: normalized.size - (query.encode === 'true' ? 0 : 44), model: config.localAiModel })
+        const normalized = await normalizeDetectionAudio(file, query.encode, bytesPerSecond * config.detectionSeconds)
+        log('info', 'detection_started', { requestId, route: '/detect-language', audioBytes: file.size, sampleBytes: normalized.size - (query.encode === 'true' ? 0 : 44), sampleStrategy: 'distributed-3-window', model: config.localAiModel })
         const response = await semaphore.run(() => localAi.audio({
           file: normalized, format: 'verbose_json', timeoutMs: Math.min(config.transcriptionTimeoutMs, 300_000),
         }))

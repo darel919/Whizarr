@@ -24,7 +24,7 @@ LOCALAI_BASE_URL=http://10.10.10.10:30200 LOCALAI_MODEL=whisper-1 bun run dev
 - `GET /status` provides Bazarr's required version response without invoking inference.
 - `GET /health` checks LocalAI reachability and whether `LOCALAI_MODEL` appears in `/v1/models`. It returns 503 when degraded.
 - `POST /asr` accepts Bazarr's `audio_file`, wraps raw 16 kHz mono PCM in WAV, and returns LocalAI SRT unchanged.
-- `POST /detect-language` sends only the configured leading audio duration to LocalAI and returns Bazarr-compatible language JSON.
+- `POST /detect-language` sends only the configured total audio duration to LocalAI and returns Bazarr-compatible language JSON. For Bazarr raw PCM, it combines three equal windows sampled around 10%, 50%, and 85% of the runtime so intros and credits do not dominate detection.
 
 The Bun HTTP idle timeout is disabled intentionally: Bazarr keeps a single request open while Whisper inference runs. Keep Bazarr's **Transcription/translation timeout** comfortably above the expected LocalAI processing time as well.
 
