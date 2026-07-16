@@ -30,6 +30,8 @@ The Bun HTTP idle timeout is disabled intentionally: Bazarr keeps a single reque
 
 `MAX_AUDIO_UPLOAD_MB` is enforced both by Bun's HTTP server and by the application. Its default of 1024 MB accommodates the full raw PCM uploads Bazarr creates for feature-length media.
 
+Language detection requires LocalAI's `verbose_json` response to expose a real ISO-639-1 language field. The proxy accepts top-level and common nested `language`/`language_code` shapes. If the configured LocalAI version/backend omits language metadata, detection fails explicitly and logs only response keys—not transcript content—for diagnosis.
+
 Raw audio is assumed only when `encode` is not `true` and the upload has no recognized audio MIME type. Recognized WAV, MP3, MP4, FLAC, Ogg, and WebM uploads are forwarded in their existing container.
 
 ## Translation

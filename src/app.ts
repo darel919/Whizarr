@@ -6,7 +6,7 @@ import { PCM_BITS_PER_SAMPLE, PCM_CHANNELS, PCM_SAMPLE_RATE } from './audio/wav'
 import { Semaphore } from './concurrency'
 import type { Config } from './config'
 import { ApiError } from './errors/api-error'
-import { normalizeLanguage } from './language/names'
+import { extractLanguage, summarizeLanguagePayload } from './language/names'
 import { createLogger } from './logger'
 import { LocalAiClient } from './services/localai'
 
@@ -89,8 +89,14 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
         }))
         let payload: unknown
         try { payload = await response.json() } catch { throw new ApiError(502, 'LocalAI returned invalid language detection JSON') }
-        const language = normalizeLanguage((payload as { language?: unknown })?.language)
-        if (!language) throw new ApiError(502, 'LocalAI did not return a valid ISO-639-1 language')
+        const language = extractLanguage(payload)
+        if (!language) {
+          throw new ApiError(
+            502,
+            'LocalAI did not return a valid ISO-639-1 language',
+            JSON.stringify(summarizeLanguagePayload(payload)),
+          )
+        }
         log('info', 'detection_completed', { requestId, status: 200, language: language.language_code, durationMs: Math.round(performance.now() - started) })
         return language
       } catch (error) {

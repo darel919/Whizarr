@@ -60,6 +60,15 @@ describe('proxy routes', () => {
     expect(uploadedSize).toBe(32_000 + 44)
   })
 
+  test('accepts a nested LocalAI language result', async () => {
+    const fetcher = async (_request: RequestInfo | URL, _init?: RequestInit) => Response.json({
+      result: { language: 'en' }, text: 'not logged',
+    })
+    const app = createApp(testConfig, { fetcher: fetcher as typeof fetch })
+    const response = await app.handle(upload('/detect-language?encode=false'))
+    expect(await response.json()).toEqual({ language_code: 'en', detected_language: 'English' })
+  })
+
   test('returns JSON when LocalAI rejects language detection', async () => {
     const fetcher = async (_request: RequestInfo | URL, _init?: RequestInit) => new Response('unsupported response format', { status: 400 })
     const app = createApp(testConfig, { fetcher: fetcher as typeof fetch })
