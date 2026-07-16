@@ -41,6 +41,13 @@ export class LocalAiClient {
     }
     if (!response.ok) {
       const details = (await response.text()).slice(0, 1000)
+      if (response.status === 413) {
+        throw new ApiError(
+          502,
+          'LocalAI rejected the audio upload (HTTP 413); increase LOCALAI_UPLOAD_LIMIT on the LocalAI service',
+          details,
+        )
+      }
       throw new ApiError(502, `LocalAI returned HTTP ${response.status}`, details)
     }
     return response

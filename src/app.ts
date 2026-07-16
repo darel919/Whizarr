@@ -81,7 +81,13 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
         log('info', 'asr_completed', { requestId, status: 200, durationMs: Math.round(performance.now() - started) })
         return srt
       } catch (error) {
-        log('error', 'asr_failed', { requestId, status: error instanceof ApiError ? error.status : 500, durationMs: Math.round(performance.now() - started), error: error instanceof Error ? error.message : String(error) })
+        log('error', 'asr_failed', {
+          requestId,
+          status: error instanceof ApiError ? error.status : 500,
+          durationMs: Math.round(performance.now() - started),
+          error: error instanceof Error ? error.message : String(error),
+          upstreamDetails: error instanceof ApiError ? error.details : undefined,
+        })
         throw error
       }
     })

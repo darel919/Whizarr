@@ -35,6 +35,14 @@ describe('proxy routes', () => {
     expect((await response.json()).error).toContain('LOCALAI_TRANSLATION_MODEL')
   })
 
+  test('explains LocalAI upload-limit rejections', async () => {
+    const fetcher = async (_request: RequestInfo | URL, _init?: RequestInit) => new Response('Request Entity Too Large', { status: 413 })
+    const app = createApp(testConfig, { fetcher: fetcher as typeof fetch })
+    const response = await app.handle(upload('/asr?task=transcribe'))
+    expect(response.status).toBe(502)
+    expect((await response.json()).error).toContain('LOCALAI_UPLOAD_LIMIT')
+  })
+
   test('uses translation endpoint and alias when configured', async () => {
     let outgoing: Request | undefined
     const fetcher = async (request: RequestInfo | URL, init?: RequestInit) => {

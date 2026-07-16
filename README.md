@@ -30,6 +30,8 @@ The Bun HTTP idle timeout is disabled intentionally: Bazarr keeps a single reque
 
 `MAX_AUDIO_UPLOAD_MB` is enforced both by Bun's HTTP server and by the application. Its default of 1024 MB accommodates the full raw PCM uploads Bazarr creates for feature-length media.
 
+LocalAI enforces a separate upload limit (15 MB by default). Set `LOCALAI_UPLOAD_LIMIT=1024` on the **LocalAI service**, not only this proxy, so LocalAI accepts the full WAV sent by `/asr`. If an ingress or reverse proxy sits in front of LocalAI, its body-size limit must also be raised.
+
 Language detection prefers LocalAI's `verbose_json` ISO-639-1 language field and accepts top-level and common nested `language`/`language_code` shapes. Some LocalAI Whisper versions return only `segments`, `text`, and `duration`; for those responses, the proxy uses the lightweight local `tinyld` detector on the 30-second transcript. It accepts only sufficiently long, high-confidence results and otherwise fails explicitly. Transcript content is never logged.
 
 Raw audio is assumed only when `encode` is not `true` and the upload has no recognized audio MIME type. Recognized WAV, MP3, MP4, FLAC, Ogg, and WebM uploads are forwarded in their existing container.
