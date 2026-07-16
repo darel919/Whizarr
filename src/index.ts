@@ -17,6 +17,7 @@ console.log(JSON.stringify({
   level: 'info', event: 'proxy_started', port: config.port,
   localAiBaseUrl: config.localAiBaseUrl, model: config.localAiModel,
   translation: config.localAiTranslationModel ? 'openai-translations-endpoint' : 'disabled',
+  maxAudioUploadMb: config.maxAudioUploadBytes / 1024 / 1024,
 }))
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

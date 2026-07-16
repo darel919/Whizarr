@@ -27,6 +27,15 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
   const log = createLogger(config)
 
   return new Elysia()
+    .onRequest(({ request }) => {
+      const url = new URL(request.url)
+      if (request.method === 'POST' && ['/asr', '/detect-language'].includes(url.pathname)) {
+        log('info', 'request_received', {
+          route: url.pathname,
+          contentLength: Number(request.headers.get('content-length')) || undefined,
+        })
+      }
+    })
     .onError(({ error, set }) => {
       const apiError = error instanceof ApiError ? error : new ApiError(500, 'Internal server error')
       set.status = apiError.status
