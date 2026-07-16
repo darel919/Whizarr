@@ -67,7 +67,7 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
       }
       const video = query.video_file
         ? (config.logFullVideoPath ? query.video_file : basename(query.video_file)) : undefined
-      log('info', 'asr_started', { requestId, route: '/asr', task, language: query.language, audioBytes: file.size, video, model: task === 'translate' ? config.localAiTranslationModel : config.localAiModel })
+      log('info', 'asr_started', { requestId, route: '/asr', task, language: query.language, audioBytes: file.size, video, model: task === 'translate' ? config.localAiTranslationModel : config.localAiModel, timeoutMs: config.transcriptionTimeoutMs })
       try {
         const normalized = await normalizeAudio(file, query.encode)
         const response = await semaphore.run(() => localAi.audio({

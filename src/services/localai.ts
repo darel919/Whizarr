@@ -26,18 +26,31 @@ export class LocalAiClient {
     if (request.language) form.append('language', request.language)
     if (request.prompt) form.append('prompt', request.prompt)
     const route = request.translation ? 'translations' : 'transcriptions'
+    const timeoutMs = request.timeoutMs ?? this.config.transcriptionTimeoutMs
+    const controller = new AbortController()
+    let timedOut = false
+    const timeout = setTimeout(() => {
+      timedOut = true
+      controller.abort(new DOMException('LocalAI request timed out', 'TimeoutError'))
+    }, timeoutMs)
 
     let response: Response
     try {
       response = await this.fetcher(`${this.config.localAiBaseUrl}/v1/audio/${route}`, {
         method: 'POST', headers: this.headers(), body: form,
-        signal: AbortSignal.timeout(request.timeoutMs || this.config.transcriptionTimeoutMs),
+        signal: controller.signal,
+        keepalive: false,
       })
     } catch (error) {
-      if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+      if (timedOut) {
         throw new ApiError(504, 'LocalAI request timed out')
       }
-      throw new ApiError(502, 'LocalAI is unavailable', error instanceof Error ? error.message : String(error))
+      const details = error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : String(error)
+      throw new ApiError(502, 'LocalAI connection closed before inference completed', details)
+    } finally {
+      clearTimeout(timeout)
     }
     if (!response.ok) {
       const details = (await response.text()).slice(0, 1000)
