@@ -28,6 +28,8 @@ LOCALAI_BASE_URL=http://10.10.10.10:30200 LOCALAI_MODEL=whisper-1 bun run dev
 
 The Bun HTTP idle timeout is disabled intentionally: Bazarr keeps a single request open while Whisper inference runs. Keep Bazarr's **Transcription/translation timeout** comfortably above the expected LocalAI processing time as well.
 
+Upstream LocalAI calls use an Undici connection pool with its built-in five-minute headers/body timeouts disabled. `LOCALAI_TRANSCRIPTION_TIMEOUT_MS` is therefore the authoritative inference deadline, including jobs where LocalAI sends no response headers until transcription finishes.
+
 `MAX_AUDIO_UPLOAD_MB` is enforced both by Bun's HTTP server and by the application. Its default of 1024 MB accommodates the full raw PCM uploads Bazarr creates for feature-length media.
 
 LocalAI enforces a separate upload limit (15 MB by default). Set `LOCALAI_UPLOAD_LIMIT=1024` on the **LocalAI service**, not only this proxy, so LocalAI accepts the full WAV sent by `/asr`. If an ingress or reverse proxy sits in front of LocalAI, its body-size limit must also be raised.

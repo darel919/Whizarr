@@ -1,5 +1,6 @@
 import type { Config } from '../config'
 import { ApiError } from '../errors/api-error'
+import { Agent, fetch as undiciFetch } from 'undici'
 
 type AudioRequest = {
   file: File
@@ -12,7 +13,27 @@ type AudioRequest = {
 }
 
 export class LocalAiClient {
-  constructor(private config: Config, private fetcher: typeof fetch = fetch) {}
+  private fetcher: typeof fetch
+
+  constructor(private config: Config, fetcher?: typeof fetch) {
+    if (fetcher) {
+      this.fetcher = fetcher
+      return
+    }
+
+    // Bun fetch has an internal five-minute response-headers timeout which is
+    // shorter than normal Whisper jobs. Undici lets our explicit timer below
+    // remain the single source of truth for request duration.
+    const dispatcher = new Agent({
+      connectTimeout: config.connectTimeoutMs,
+      headersTimeout: 0,
+      bodyTimeout: 0,
+    })
+    this.fetcher = ((input: RequestInfo | URL, init?: RequestInit) => undiciFetch(input as string | URL, {
+      ...init,
+      dispatcher,
+    } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>) as typeof fetch
+  }
 
   private headers() {
     return this.config.localAiApiKey ? { Authorization: `Bearer ${this.config.localAiApiKey}` } : undefined
