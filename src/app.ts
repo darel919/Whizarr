@@ -6,6 +6,7 @@ import { PCM_BITS_PER_SAMPLE, PCM_CHANNELS, PCM_SAMPLE_RATE } from './audio/wav'
 import { Semaphore } from './concurrency'
 import type { Config } from './config'
 import { ApiError } from './errors/api-error'
+import { detectTranscriptLanguage } from './language/detect-text'
 import { extractLanguage, summarizeLanguagePayload } from './language/names'
 import { createLogger } from './logger'
 import { LocalAiClient } from './services/localai'
@@ -89,7 +90,15 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
         }))
         let payload: unknown
         try { payload = await response.json() } catch { throw new ApiError(502, 'LocalAI returned invalid language detection JSON') }
-        const language = extractLanguage(payload)
+        let language = extractLanguage(payload)
+        let detectionSource = 'localai'
+        let confidence: number | undefined
+        if (!language) {
+          const fallback = detectTranscriptLanguage(payload)
+          language = fallback?.language
+          confidence = fallback?.confidence
+          detectionSource = 'transcript-text'
+        }
         if (!language) {
           throw new ApiError(
             502,
@@ -97,7 +106,11 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
             JSON.stringify(summarizeLanguagePayload(payload)),
           )
         }
-        log('info', 'detection_completed', { requestId, status: 200, language: language.language_code, durationMs: Math.round(performance.now() - started) })
+        log('info', 'detection_completed', {
+          requestId, status: 200, language: language.language_code,
+          detectionSource, confidence,
+          durationMs: Math.round(performance.now() - started),
+        })
         return language
       } catch (error) {
         log('error', 'detection_failed', {

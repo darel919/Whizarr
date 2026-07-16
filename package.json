@@ -8,7 +8,8 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
-    "elysia": "latest"
+    "elysia": "latest",
+    "tinyld": "^1.3.4"
   },
   "devDependencies": {
     "bun-types": "latest",

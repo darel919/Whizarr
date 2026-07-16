@@ -69,6 +69,17 @@ describe('proxy routes', () => {
     expect(await response.json()).toEqual({ language_code: 'en', detected_language: 'English' })
   })
 
+  test('falls back to confident transcript text detection when LocalAI omits language', async () => {
+    const fetcher = async (_request: RequestInfo | URL, _init?: RequestInit) => Response.json({
+      segments: [],
+      text: 'Ini adalah percakapan dalam bahasa Indonesia tentang sebuah rumah tua yang sangat menyeramkan dan penuh misteri.',
+      duration: 30,
+    })
+    const app = createApp(testConfig, { fetcher: fetcher as typeof fetch })
+    const response = await app.handle(upload('/detect-language?encode=false'))
+    expect(await response.json()).toEqual({ language_code: 'id', detected_language: 'Indonesian' })
+  })
+
   test('returns JSON when LocalAI rejects language detection', async () => {
     const fetcher = async (_request: RequestInfo | URL, _init?: RequestInit) => new Response('unsupported response format', { status: 400 })
     const app = createApp(testConfig, { fetcher: fetcher as typeof fetch })
