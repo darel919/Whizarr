@@ -98,13 +98,18 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
       if (file.size > config.maxAudioUploadBytes) throw new ApiError(413, 'audio_file exceeds MAX_AUDIO_UPLOAD_MB')
       const bytesPerSecond = PCM_SAMPLE_RATE * PCM_CHANNELS * (PCM_BITS_PER_SAMPLE / 8)
       try {
-        const normalized = await normalizeDetectionAudio(file, query.encode, bytesPerSecond * config.detectionSeconds)
-        log('info', 'detection_started', { requestId, route: '/detect-language', audioBytes: file.size, sampleBytes: normalized.size - (query.encode === 'true' ? 0 : 44), sampleStrategy: 'distributed-3-window', model: config.localAiModel })
-        const response = await semaphore.run(() => localAi.audio({
-          file: normalized, format: 'verbose_json', timeoutMs: Math.min(config.transcriptionTimeoutMs, 300_000),
-        }))
-        let payload: unknown
-        try { payload = await response.json() } catch { throw new ApiError(502, 'LocalAI returned invalid language detection JSON') }
+        const detect = async (seconds: number) => {
+          const normalized = await normalizeDetectionAudio(file, query.encode, bytesPerSecond * seconds)
+          const response = await semaphore.run(() => localAi.audio({
+            file: normalized, format: 'verbose_json', timeoutMs: Math.min(config.transcriptionTimeoutMs, 300_000),
+          }))
+          let payload: unknown
+          try { payload = await response.json() } catch { throw new ApiError(502, 'LocalAI returned invalid language detection JSON') }
+          return { payload, sampleBytes: normalized.size - (query.encode === 'true' ? 0 : 44) }
+        }
+
+        log('info', 'detection_started', { requestId, route: '/detect-language', audioBytes: file.size, sampleBytes: bytesPerSecond * config.detectionSeconds, sampleStrategy: 'distributed-3-window', model: config.localAiModel })
+        let { payload } = await detect(config.detectionSeconds)
         let language = extractLanguage(payload)
         let detectionSource = 'localai'
         let confidence: number | undefined
@@ -113,6 +118,24 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
           language = fallback?.language
           confidence = fallback?.confidence
           detectionSource = 'transcript-text'
+        }
+        if (!language) {
+          const retrySeconds = config.detectionSeconds * 2
+          log('info', 'detection_retry', {
+            requestId,
+            reason: 'insufficient-confident-transcript',
+            detectionSeconds: retrySeconds,
+            sampleStrategy: 'distributed-3-window',
+          })
+          ;({ payload } = await detect(retrySeconds))
+          language = extractLanguage(payload)
+          detectionSource = 'localai-retry'
+          if (!language) {
+            const fallback = detectTranscriptLanguage(payload)
+            language = fallback?.language
+            confidence = fallback?.confidence
+            detectionSource = 'transcript-text-retry'
+          }
         }
         if (!language) {
           throw new ApiError(

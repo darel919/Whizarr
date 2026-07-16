@@ -88,6 +88,21 @@ describe('proxy routes', () => {
     expect(await response.json()).toEqual({ language_code: 'id', detected_language: 'Indonesian' })
   })
 
+  test('retries uncertain language detection with twice the sample duration', async () => {
+    const uploadedSizes: number[] = []
+    const fetcher = async (_request: RequestInfo | URL, init?: RequestInit) => {
+      const form = await new Request('http://localai.test', init).formData()
+      uploadedSizes.push((form.get('file') as File).size)
+      return uploadedSizes.length === 1
+        ? Response.json({ text: 'Hi.' })
+        : Response.json({ text: 'This is a longer English transcript with enough spoken words to identify the language confidently.' })
+    }
+    const app = createApp(testConfig, { fetcher: fetcher as typeof fetch })
+    const response = await app.handle(upload('/detect-language?encode=false', new Uint8Array(128_000)))
+    expect((await response.json()).language_code).toBe('en')
+    expect(uploadedSizes).toEqual([32_000 + 44, 64_000 + 44])
+  })
+
   test('returns JSON when LocalAI rejects language detection', async () => {
     const fetcher = async (_request: RequestInfo | URL, _init?: RequestInit) => new Response('unsupported response format', { status: 400 })
     const app = createApp(testConfig, { fetcher: fetcher as typeof fetch })
