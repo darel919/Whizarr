@@ -59,4 +59,13 @@ describe('proxy routes', () => {
     expect(await response.json()).toEqual({ language_code: 'id', detected_language: 'Indonesian' })
     expect(uploadedSize).toBe(32_000 + 44)
   })
+
+  test('returns JSON when LocalAI rejects language detection', async () => {
+    const fetcher = async (_request: RequestInfo | URL, _init?: RequestInit) => new Response('unsupported response format', { status: 400 })
+    const app = createApp(testConfig, { fetcher: fetcher as typeof fetch })
+    const response = await app.handle(upload('/detect-language?encode=false'))
+    expect(response.status).toBe(502)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect((await response.json()).error).toContain('LocalAI returned HTTP 400')
+  })
 })

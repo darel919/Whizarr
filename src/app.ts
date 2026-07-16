@@ -81,16 +81,27 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
       const file = audioFile(body)
       if (file.size > config.maxAudioUploadBytes) throw new ApiError(413, 'audio_file exceeds MAX_AUDIO_UPLOAD_MB')
       const bytesPerSecond = PCM_SAMPLE_RATE * PCM_CHANNELS * (PCM_BITS_PER_SAMPLE / 8)
-      const normalized = await normalizeAudio(file, query.encode, bytesPerSecond * config.detectionSeconds)
-      log('info', 'detection_started', { requestId, route: '/detect-language', audioBytes: file.size, sampleBytes: normalized.size - (query.encode === 'true' ? 0 : 44) })
-      const response = await semaphore.run(() => localAi.audio({
-        file: normalized, format: 'verbose_json', timeoutMs: Math.min(config.transcriptionTimeoutMs, 300_000),
-      }))
-      let payload: unknown
-      try { payload = await response.json() } catch { throw new ApiError(502, 'LocalAI returned invalid language detection JSON') }
-      const language = normalizeLanguage((payload as { language?: unknown })?.language)
-      if (!language) throw new ApiError(502, 'LocalAI did not return a valid ISO-639-1 language')
-      log('info', 'detection_completed', { requestId, status: 200, language: language.language_code, durationMs: Math.round(performance.now() - started) })
-      return language
+      try {
+        const normalized = await normalizeAudio(file, query.encode, bytesPerSecond * config.detectionSeconds)
+        log('info', 'detection_started', { requestId, route: '/detect-language', audioBytes: file.size, sampleBytes: normalized.size - (query.encode === 'true' ? 0 : 44), model: config.localAiModel })
+        const response = await semaphore.run(() => localAi.audio({
+          file: normalized, format: 'verbose_json', timeoutMs: Math.min(config.transcriptionTimeoutMs, 300_000),
+        }))
+        let payload: unknown
+        try { payload = await response.json() } catch { throw new ApiError(502, 'LocalAI returned invalid language detection JSON') }
+        const language = normalizeLanguage((payload as { language?: unknown })?.language)
+        if (!language) throw new ApiError(502, 'LocalAI did not return a valid ISO-639-1 language')
+        log('info', 'detection_completed', { requestId, status: 200, language: language.language_code, durationMs: Math.round(performance.now() - started) })
+        return language
+      } catch (error) {
+        log('error', 'detection_failed', {
+          requestId,
+          status: error instanceof ApiError ? error.status : 500,
+          durationMs: Math.round(performance.now() - started),
+          error: error instanceof Error ? error.message : String(error),
+          upstreamDetails: error instanceof ApiError ? error.details : undefined,
+        })
+        throw error
+      }
     })
 }

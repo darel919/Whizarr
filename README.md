@@ -26,6 +26,8 @@ LOCALAI_BASE_URL=http://10.10.10.10:30200 LOCALAI_MODEL=whisper-1 bun run dev
 - `POST /asr` accepts Bazarr's `audio_file`, wraps raw 16 kHz mono PCM in WAV, and returns LocalAI SRT unchanged.
 - `POST /detect-language` sends only the configured leading audio duration to LocalAI and returns Bazarr-compatible language JSON.
 
+The Bun HTTP idle timeout is disabled intentionally: Bazarr keeps a single request open while Whisper inference runs. Keep Bazarr's **Transcription/translation timeout** comfortably above the expected LocalAI processing time as well.
+
 Raw audio is assumed only when `encode` is not `true` and the upload has no recognized audio MIME type. Recognized WAV, MP3, MP4, FLAC, Ogg, and WebM uploads are forwarded in their existing container.
 
 ## Translation
