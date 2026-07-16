@@ -1,6 +1,8 @@
 import type { Config } from '../config'
 import { ApiError } from '../errors/api-error'
-import { Agent, fetch as undiciFetch } from 'undici'
+// Bun aliases the bare `undici` specifier to its native fetch implementation.
+// Import the package entrypoint explicitly so its configurable dispatcher is used.
+import { Agent, fetch as undiciFetch } from 'undici/index.js'
 
 type AudioRequest = {
   file: File
@@ -26,8 +28,8 @@ export class LocalAiClient {
     // remain the single source of truth for request duration.
     const dispatcher = new Agent({
       connectTimeout: config.connectTimeoutMs,
-      headersTimeout: 0,
-      bodyTimeout: 0,
+      headersTimeout: config.transcriptionTimeoutMs,
+      bodyTimeout: config.transcriptionTimeoutMs,
     })
     this.fetcher = ((input: RequestInfo | URL, init?: RequestInit) => undiciFetch(input as string | URL, {
       ...init,
