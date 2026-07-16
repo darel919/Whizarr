@@ -1,7 +1,15 @@
-import { Elysia } from "elysia";
+import { createApp } from './app'
+import { loadConfig } from './config'
 
-const app = new Elysia().get("/", () => "Hello Elysia").listen(3000);
+const config = loadConfig()
+const app = createApp(config).listen({ port: config.port, hostname: '0.0.0.0' })
 
-console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
-);
+console.log(JSON.stringify({
+  level: 'info', event: 'proxy_started', port: config.port,
+  localAiBaseUrl: config.localAiBaseUrl, model: config.localAiModel,
+  translation: config.localAiTranslationModel ? 'openai-translations-endpoint' : 'disabled',
+}))
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => { app.stop(); process.exit(0) })
+}

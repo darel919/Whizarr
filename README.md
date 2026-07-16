@@ -1,15 +1,43 @@
-# Elysia with Bun runtime
+# Bazarr LocalAI Whisper Proxy
 
-## Getting Started
-To get started with this template, simply paste this command into your terminal:
+An Elysia/Bun compatibility proxy that translates Bazarr's SubGen-style Whisper requests into LocalAI's OpenAI-compatible audio API. It runs no inference model and needs no media mounts or FFmpeg.
+
+## Configure and run
+
 ```bash
-bun create elysia ./elysia-example
+cp .env.example .env
+# Set LOCALAI_BASE_URL and LOCALAI_MODEL in .env
+docker compose up --build -d
 ```
 
-## Development
-To start the development server run:
+Configure Bazarr's **Whisper ASR Docker Endpoint** as `http://HOST:30201`. Do not point Bazarr directly at LocalAI.
+
+For local development:
+
 ```bash
-bun run dev
+bun install
+LOCALAI_BASE_URL=http://10.10.10.10:30200 LOCALAI_MODEL=whisper-1 bun run dev
 ```
 
-Open http://localhost:3000/ with your browser to see the result.
+## API
+
+- `GET /status` provides Bazarr's required version response without invoking inference.
+- `GET /health` checks LocalAI reachability and whether `LOCALAI_MODEL` appears in `/v1/models`. It returns 503 when degraded.
+- `POST /asr` accepts Bazarr's `audio_file`, wraps raw 16 kHz mono PCM in WAV, and returns LocalAI SRT unchanged.
+- `POST /detect-language` sends only the configured leading audio duration to LocalAI and returns Bazarr-compatible language JSON.
+
+Raw audio is assumed only when `encode` is not `true` and the upload has no recognized audio MIME type. Recognized WAV, MP3, MP4, FLAC, Ogg, and WebM uploads are forwarded in their existing container.
+
+## Translation
+
+Translation is disabled by default because LocalAI backend support varies. When your installed LocalAI backend has been verified to expose `POST /v1/audio/translations`, set `LOCALAI_TRANSLATION_MODEL` to the working model or alias. The proxy then uses that endpoint. Without this explicit configuration, `task=translate` returns HTTP 501 and is never silently downgraded to transcription.
+
+## Verification
+
+```bash
+bun test
+bun run typecheck
+docker compose config
+```
+
+Real LocalAI integration still requires audio samples and access to the deployed backend. Probe `/v1/models`, transcription SRT, verbose JSON language detection, and translation before enabling the Bazarr provider in production.

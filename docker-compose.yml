@@ -1,0 +1,8 @@
+services:
+  bazarr-localai-whisper-proxy:
+    build: .
+    container_name: bazarr-localai-whisper-proxy
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "30201:9000"
