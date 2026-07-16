@@ -18,6 +18,8 @@ console.log(JSON.stringify({
   localAiBaseUrl: config.localAiBaseUrl, model: config.localAiModel,
   translation: config.localAiTranslationModel ? 'openai-translations-endpoint' : 'disabled',
   maxAudioUploadMb: config.maxAudioUploadBytes / 1024 / 1024,
+  transcriptionTimeoutMs: config.transcriptionTimeoutMs,
+  maxConcurrentTranscriptions: config.maxConcurrentTranscriptions,
 }))
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
