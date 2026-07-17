@@ -57,15 +57,31 @@ export class LocalAiClient {
       controller.abort(new DOMException('LocalAI request timed out', 'TimeoutError'))
     }, timeoutMs)
 
-    let response: Response
     try {
-      response = await this.fetcher(`${this.config.localAiBaseUrl}/v1/audio/${route}`, {
+      const response = await this.fetcher(`${this.config.localAiBaseUrl}/v1/audio/${route}`, {
         method: 'POST', headers: this.headers(), body: form,
         signal: controller.signal,
         keepalive: false,
       })
+      // Buffer the complete upstream response while the abort timer is still
+      // active. Previously the timer was cleared after headers, allowing a
+      // stalled response body to leave an ASR chunk waiting indefinitely.
+      const body = await response.arrayBuffer()
+      if (!response.ok) {
+        const details = new TextDecoder().decode(body).slice(0, 1000)
+        if (response.status === 413) {
+          throw new ApiError(
+            502,
+            'LocalAI rejected the audio upload (HTTP 413); increase LOCALAI_UPLOAD_LIMIT on the LocalAI service',
+            details,
+          )
+        }
+        throw new ApiError(502, `LocalAI returned HTTP ${response.status}`, details)
+      }
+      return new Response(body, { status: response.status, headers: response.headers })
     } catch (error) {
-      if (timedOut) {
+      if (error instanceof ApiError) throw error
+      if (timedOut || controller.signal.aborted) {
         throw new ApiError(504, 'LocalAI request timed out')
       }
       const details = error instanceof Error
@@ -75,18 +91,6 @@ export class LocalAiClient {
     } finally {
       clearTimeout(timeout)
     }
-    if (!response.ok) {
-      const details = (await response.text()).slice(0, 1000)
-      if (response.status === 413) {
-        throw new ApiError(
-          502,
-          'LocalAI rejected the audio upload (HTTP 413); increase LOCALAI_UPLOAD_LIMIT on the LocalAI service',
-          details,
-        )
-      }
-      throw new ApiError(502, `LocalAI returned HTTP ${response.status}`, details)
-    }
-    return response
   }
 
   async health() {

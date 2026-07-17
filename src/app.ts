@@ -89,6 +89,11 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
               prompt: query.initial_prompt, translation: task === 'translate',
               model: task === 'translate' ? config.localAiTranslationModel : undefined,
             })
+            log('info', 'asr_chunk_response_received', {
+              requestId, chunk: index + 1, chunks: chunks.length,
+              status: response.status,
+              contentLength: response.headers.get('content-length'),
+            })
             const chunkSrt = await response.text()
             if (!srtPattern.test(chunkSrt)) throw new ApiError(502, `LocalAI returned invalid SRT output for chunk ${index + 1}`)
             const adjusted = offsetAndRenumberSrt(
