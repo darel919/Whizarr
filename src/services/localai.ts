@@ -1,8 +1,5 @@
 import type { Config } from '../config'
 import { ApiError } from '../errors/api-error'
-// Bun aliases the bare `undici` specifier to its native fetch implementation.
-// Import the package entrypoint explicitly so its configurable dispatcher is used.
-import { Agent, fetch as undiciFetch } from 'undici/index.js'
 
 type AudioRequest = {
   file: File
@@ -22,19 +19,11 @@ export class LocalAiClient {
       this.fetcher = fetcher
       return
     }
-
-    // Bun fetch has an internal five-minute response-headers timeout which is
-    // shorter than normal Whisper jobs. Undici lets our explicit timer below
-    // remain the single source of truth for request duration.
-    const dispatcher = new Agent({
-      connectTimeout: config.connectTimeoutMs,
-      headersTimeout: config.transcriptionTimeoutMs,
-      bodyTimeout: config.transcriptionTimeoutMs,
-    })
-    this.fetcher = ((input: RequestInfo | URL, init?: RequestInit) => undiciFetch(input as string | URL, {
-      ...init,
-      dispatcher,
-    } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>) as typeof fetch
+    // ASR audio is split into bounded chunks before reaching this client.
+    // Bun's native fetch interoperates reliably with LocalAI's chunked HTTP
+    // responses; the standalone Undici dispatcher could remain pending even
+    // after LocalAI logged a successful HTTP 200 response.
+    this.fetcher = globalThis.fetch
   }
 
   private headers() {
