@@ -25,7 +25,7 @@ describe('proxy routes', () => {
     expect(form.get('language')).toBe('id')
     expect(form.get('response_format')).toBe('srt')
     const file = form.get('file') as File
-    expect(file.name).toBe('audio.wav')
+    expect(file.name).toBe('audio-1.wav')
     expect(new TextDecoder().decode(new Uint8Array(await file.arrayBuffer()).subarray(0, 4))).toBe('RIFF')
   })
 
@@ -53,6 +53,20 @@ describe('proxy routes', () => {
     expect((await app.handle(upload('/asr?task=translate'))).status).toBe(200)
     expect(outgoing?.url).toEndWith('/v1/audio/translations')
     expect((await outgoing!.formData()).get('model')).toBe('whisper-translate')
+  })
+
+  test('combines raw PCM chunks into one continuous SRT', async () => {
+    let calls = 0
+    const fetcher = async (_request: RequestInfo | URL, _init?: RequestInit) => {
+      calls++
+      return new Response('1\n00:00:00,000 --> 00:00:01,000\nChunk text\n')
+    }
+    const app = createApp({ ...testConfig, asrChunkSeconds: 1 }, { fetcher: fetcher as typeof fetch })
+    const response = await app.handle(upload('/asr?task=transcribe', new Uint8Array(64_000)))
+    const srt = await response.text()
+    expect(calls).toBe(2)
+    expect(srt).toContain('1\n00:00:00,000 --> 00:00:01,000')
+    expect(srt).toContain('2\n00:00:01,000 --> 00:00:02,000')
   })
 
   test('sends only the configured total PCM duration for detection', async () => {

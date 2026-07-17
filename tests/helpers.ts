@@ -3,6 +3,7 @@ import type { Config } from '../src/config'
 export const testConfig: Config = {
   port: 9000, localAiBaseUrl: 'http://localai.test', localAiModel: 'whisper-1',
   connectTimeoutMs: 100, transcriptionTimeoutMs: 1000, detectionSeconds: 1,
+  asrChunkSeconds: 600,
   maxConcurrentTranscriptions: 1, maxAudioUploadBytes: 1024 * 1024,
   logLevel: 'error', logFullVideoPath: false,
 }

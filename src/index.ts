@@ -20,6 +20,7 @@ console.log(JSON.stringify({
   maxAudioUploadMb: config.maxAudioUploadBytes / 1024 / 1024,
   transcriptionTimeoutMs: config.transcriptionTimeoutMs,
   maxConcurrentTranscriptions: config.maxConcurrentTranscriptions,
+  asrChunkSeconds: config.asrChunkSeconds,
 }))
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

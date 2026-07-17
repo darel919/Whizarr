@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
 import { Elysia } from 'elysia'
 import packageJson from '../package.json'
-import { normalizeAudio, normalizeDetectionAudio } from './audio/normalize'
+import { chunkRawPcm, normalizeAudio, normalizeDetectionAudio } from './audio/normalize'
 import { PCM_BITS_PER_SAMPLE, PCM_CHANNELS, PCM_SAMPLE_RATE } from './audio/wav'
 import { Semaphore } from './concurrency'
 import type { Config } from './config'
@@ -10,6 +10,7 @@ import { detectTranscriptLanguage } from './language/detect-text'
 import { extractLanguage, summarizeLanguagePayload } from './language/names'
 import { createLogger } from './logger'
 import { LocalAiClient } from './services/localai'
+import { offsetAndRenumberSrt } from './subtitles/srt'
 
 type Dependencies = { fetcher?: typeof fetch }
 const srtPattern = /^\s*\d+\s*\r?\n\d{2}:\d{2}:\d{2},\d{3}\s+-->\s+\d{2}:\d{2}:\d{2},\d{3}/m
@@ -69,16 +70,43 @@ export function createApp(config: Config, dependencies: Dependencies = {}) {
         ? (config.logFullVideoPath ? query.video_file : basename(query.video_file)) : undefined
       log('info', 'asr_started', { requestId, route: '/asr', task, language: query.language, audioBytes: file.size, video, model: task === 'translate' ? config.localAiTranslationModel : config.localAiModel, timeoutMs: config.transcriptionTimeoutMs })
       try {
-        const normalized = await normalizeAudio(file, query.encode)
-        const response = await semaphore.run(() => localAi.audio({
-          file: normalized, format: 'srt', language: query.language,
-          prompt: query.initial_prompt, translation: task === 'translate',
-          model: task === 'translate' ? config.localAiTranslationModel : undefined,
-        }))
-        const srt = await response.text()
-        if (!srtPattern.test(srt)) throw new ApiError(502, 'LocalAI returned invalid SRT output')
+        const bytesPerSecond = PCM_SAMPLE_RATE * PCM_CHANNELS * (PCM_BITS_PER_SAMPLE / 8)
+        const rawChunks = await chunkRawPcm(file, query.encode, bytesPerSecond * config.asrChunkSeconds)
+        const chunks = rawChunks || [{ file: await normalizeAudio(file, query.encode), offsetBytes: 0, pcmBytes: file.size }]
+        const srt = await semaphore.run(async () => {
+          const output: string[] = []
+          let nextIndex = 1
+          for (let index = 0; index < chunks.length; index++) {
+            const chunk = chunks[index]
+            log('info', 'asr_chunk_started', {
+              requestId, chunk: index + 1, chunks: chunks.length,
+              offsetSeconds: Math.round(chunk.offsetBytes / bytesPerSecond),
+              audioBytes: chunk.pcmBytes,
+            })
+            const chunkStarted = performance.now()
+            const response = await localAi.audio({
+              file: chunk.file, format: 'srt', language: query.language,
+              prompt: query.initial_prompt, translation: task === 'translate',
+              model: task === 'translate' ? config.localAiTranslationModel : undefined,
+            })
+            const chunkSrt = await response.text()
+            if (!srtPattern.test(chunkSrt)) throw new ApiError(502, `LocalAI returned invalid SRT output for chunk ${index + 1}`)
+            const adjusted = offsetAndRenumberSrt(
+              chunkSrt,
+              Math.round(chunk.offsetBytes / bytesPerSecond * 1000),
+              nextIndex,
+            )
+            output.push(adjusted.srt)
+            nextIndex = adjusted.nextIndex
+            log('info', 'asr_chunk_completed', {
+              requestId, chunk: index + 1, chunks: chunks.length,
+              durationMs: Math.round(performance.now() - chunkStarted),
+            })
+          }
+          return `${output.join('\n\n')}\n`
+        })
         set.headers['content-type'] = 'text/plain; charset=utf-8'
-        log('info', 'asr_completed', { requestId, status: 200, durationMs: Math.round(performance.now() - started) })
+        log('info', 'asr_completed', { requestId, status: 200, chunks: chunks.length, durationMs: Math.round(performance.now() - started) })
         return srt
       } catch (error) {
         log('error', 'asr_failed', {

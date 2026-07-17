@@ -23,12 +23,14 @@ LOCALAI_BASE_URL=http://10.10.10.10:30200 LOCALAI_MODEL=whisper-1 bun run dev
 
 - `GET /status` provides Bazarr's required version response without invoking inference.
 - `GET /health` checks LocalAI reachability and whether `LOCALAI_MODEL` appears in `/v1/models`. It returns 503 when degraded.
-- `POST /asr` accepts Bazarr's `audio_file`, wraps raw 16 kHz mono PCM in WAV, and returns LocalAI SRT unchanged.
+- `POST /asr` accepts Bazarr's `audio_file`, splits raw 16 kHz mono PCM into bounded WAV chunks, forwards them sequentially, offsets/renumbers the returned cues, and returns one SRT.
 - `POST /detect-language` sends only the configured total audio duration to LocalAI and returns Bazarr-compatible language JSON. For Bazarr raw PCM, it combines three equal windows sampled around 10%, 50%, and 85% of the runtime so intros and credits do not dominate detection.
 
 The Bun HTTP idle timeout is disabled intentionally: Bazarr keeps a single request open while Whisper inference runs. Keep Bazarr's **Transcription/translation timeout** comfortably above the expected LocalAI processing time as well.
 
 Upstream LocalAI calls use an Undici connection pool with its built-in five-minute headers/body timeouts disabled. `LOCALAI_TRANSCRIPTION_TIMEOUT_MS` is therefore the authoritative inference deadline, including jobs where LocalAI sends no response headers until transcription finishes.
+
+`ASR_CHUNK_SECONDS` defaults to 600 (10 minutes). Chunking prevents a feature-length raw PCM upload from becoming one opaque, failure-prone LocalAI inference. The proxy logs `asr_chunk_started` and `asr_chunk_completed` for progress. Containerized audio from future clients is still forwarded as one file because reliable container splitting would require FFmpeg.
 
 `MAX_AUDIO_UPLOAD_MB` is enforced both by Bun's HTTP server and by the application. Its default of 1024 MB accommodates the full raw PCM uploads Bazarr creates for feature-length media.
 

@@ -4,10 +4,14 @@ const CONTAINER_TYPES = new Set([
   'audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp4', 'audio/flac', 'audio/ogg', 'audio/webm',
 ])
 
+export function isRawPcmUpload(file: File, encode: string | undefined) {
+  return encode !== 'true' && !CONTAINER_TYPES.has(file.type.toLowerCase())
+}
+
 export async function normalizeAudio(file: File, encode: string | undefined, byteLimit?: number) {
   const source = new Uint8Array(await file.arrayBuffer())
   const bytes = byteLimit === undefined ? source : source.subarray(0, byteLimit)
-  const shouldWrap = encode !== 'true' && !CONTAINER_TYPES.has(file.type.toLowerCase())
+  const shouldWrap = isRawPcmUpload(file, encode)
   if (shouldWrap) {
     const wav = rawPcm16LeToWav(bytes)
     return new File([wav.slice().buffer], 'audio.wav', { type: 'audio/wav' })
@@ -17,7 +21,7 @@ export async function normalizeAudio(file: File, encode: string | undefined, byt
 
 export async function normalizeDetectionAudio(file: File, encode: string | undefined, byteLimit: number) {
   const source = new Uint8Array(await file.arrayBuffer())
-  const isRawPcm = encode !== 'true' && !CONTAINER_TYPES.has(file.type.toLowerCase())
+  const isRawPcm = isRawPcmUpload(file, encode)
   if (!isRawPcm || source.byteLength <= byteLimit) return normalizeAudio(file, encode, byteLimit)
 
   // Movie openings are frequently silence, music, or credits. Use three equal
@@ -36,4 +40,21 @@ export async function normalizeDetectionAudio(file: File, encode: string | undef
   }
   const wav = rawPcm16LeToWav(output)
   return new File([wav.slice().buffer], 'audio.wav', { type: 'audio/wav' })
+}
+
+export async function chunkRawPcm(file: File, encode: string | undefined, chunkBytes: number) {
+  if (!isRawPcmUpload(file, encode)) return undefined
+  const source = new Uint8Array(await file.arrayBuffer())
+  const alignedChunkBytes = Math.floor(chunkBytes / 2) * 2
+  const chunks: Array<{ file: File; offsetBytes: number; pcmBytes: number }> = []
+  for (let offset = 0; offset < source.byteLength; offset += alignedChunkBytes) {
+    const pcm = source.subarray(offset, Math.min(offset + alignedChunkBytes, source.byteLength))
+    const wav = rawPcm16LeToWav(pcm)
+    chunks.push({
+      file: new File([wav.slice().buffer], `audio-${chunks.length + 1}.wav`, { type: 'audio/wav' }),
+      offsetBytes: offset,
+      pcmBytes: pcm.byteLength,
+    })
+  }
+  return chunks
 }

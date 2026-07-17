@@ -7,6 +7,7 @@ export type Config = {
   connectTimeoutMs: number
   transcriptionTimeoutMs: number
   detectionSeconds: number
+  asrChunkSeconds: number
   maxConcurrentTranscriptions: number
   maxAudioUploadBytes: number
   logLevel: 'debug' | 'info' | 'warn' | 'error'
@@ -48,6 +49,7 @@ export function loadConfig(env: Record<string, string | undefined> = Bun.env): C
     connectTimeoutMs: positiveInt('LOCALAI_CONNECT_TIMEOUT_MS', env.LOCALAI_CONNECT_TIMEOUT_MS, 10_000),
     transcriptionTimeoutMs: positiveInt('LOCALAI_TRANSCRIPTION_TIMEOUT_MS', env.LOCALAI_TRANSCRIPTION_TIMEOUT_MS, 3_600_000),
     detectionSeconds: positiveInt('LANGUAGE_DETECTION_SECONDS', env.LANGUAGE_DETECTION_SECONDS, 30),
+    asrChunkSeconds: positiveInt('ASR_CHUNK_SECONDS', env.ASR_CHUNK_SECONDS, 600),
     maxConcurrentTranscriptions: positiveInt('MAX_CONCURRENT_TRANSCRIPTIONS', env.MAX_CONCURRENT_TRANSCRIPTIONS, 1),
     maxAudioUploadBytes: positiveInt('MAX_AUDIO_UPLOAD_MB', env.MAX_AUDIO_UPLOAD_MB, 1024) * 1024 * 1024,
     logLevel: logLevel as Config['logLevel'],
