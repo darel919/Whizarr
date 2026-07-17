@@ -28,9 +28,16 @@ LOCALAI_BASE_URL=http://10.10.10.10:30200 LOCALAI_MODEL=whisper-1 bun run dev
 
 The Bun HTTP idle timeout is disabled intentionally: Bazarr keeps a single request open while Whisper inference runs. Keep Bazarr's **Transcription/translation timeout** comfortably above the expected LocalAI processing time as well.
 
-Upstream LocalAI calls use an Undici connection pool with its built-in five-minute headers/body timeouts disabled. `LOCALAI_TRANSCRIPTION_TIMEOUT_MS` is therefore the authoritative inference deadline, including jobs where LocalAI sends no response headers until transcription finishes.
+Upstream LocalAI calls use Bun's native fetch implementation. The proxy buffers each complete LocalAI response while `LOCALAI_TRANSCRIPTION_TIMEOUT_MS` remains active, so the deadline covers both inference and response-body delivery.
 
 `ASR_CHUNK_SECONDS` defaults to 600 (10 minutes). Chunking prevents a feature-length raw PCM upload from becoming one opaque, failure-prone LocalAI inference. The proxy logs `asr_chunk_started` and `asr_chunk_completed` for progress. Containerized audio from future clients is still forwarded as one file because reliable container splitting would require FFmpeg.
+
+For slower hardware, start with five-minute chunks and one transcription at a time:
+
+```env
+ASR_CHUNK_SECONDS=300
+MAX_CONCURRENT_TRANSCRIPTIONS=1
+```
 
 `MAX_AUDIO_UPLOAD_MB` is enforced both by Bun's HTTP server and by the application. Its default of 1024 MB accommodates the full raw PCM uploads Bazarr creates for feature-length media.
 
@@ -39,6 +46,24 @@ LocalAI enforces a separate upload limit (15 MB by default). Set `LOCALAI_UPLOAD
 Language detection prefers LocalAI's `verbose_json` ISO-639-1 language field and accepts top-level and common nested `language`/`language_code` shapes. Some LocalAI Whisper versions return only `segments`, `text`, and `duration`; for those responses, the proxy uses the lightweight local `tinyld` detector on the transcript. It accepts only sufficiently long, high-confidence results. If the initial distributed sample is uncertain, the proxy retries once with twice the configured duration and otherwise fails explicitly. Transcript content is never logged.
 
 Raw audio is assumed only when `encode` is not `true` and the upload has no recognized audio MIME type. Recognized WAV, MP3, MP4, FLAC, Ogg, and WebM uploads are forwarded in their existing container.
+
+## Observed performance
+
+One tested setup produced the following result for a one-hour TV episode (about 42 minutes of audio):
+
+| Component | Tested value |
+| --- | --- |
+| CPU | Intel Core i5-3570 |
+| GPU | AMD Radeon R5 430 2 GB |
+| Inference server | LocalAI |
+| Model | Whisper Base (`whisper-base`) |
+| Backend | Whisper |
+| Proxy chunking | 300 seconds, sequential |
+| Result | 9/9 chunks completed; merged SRT returned with HTTP 200 |
+| Total proxy time | 496.196 seconds (8 minutes 16 seconds) |
+| Throughput | About 5.1x faster than the 42-minute audio runtime |
+
+This is a single observed run, not a guaranteed benchmark. Performance varies with LocalAI configuration, backend acceleration, media content, thermal limits, and concurrent workloads.
 
 ## Translation
 
